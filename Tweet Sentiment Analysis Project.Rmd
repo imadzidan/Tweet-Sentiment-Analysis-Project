@@ -15,7 +15,7 @@ output: pdf_document
 * validation.csv dataset for final prediction. Also provided by kaggle
 
 # Requirements
-* Provide a model that is able to provide a sentiment for a given tweet
+* Provide a model that is able to predict a sentiment for a given tweet
 * Apply model on the provided datasets
 
 
@@ -31,7 +31,7 @@ I have read a lot about the topic and decided to run the given data through many
 the final prediction. This is really the essence of what I learned in this course. It is always recommended to look at options and pick the best. So, to do this, the below will be done:
 
 1.  Load data
-2.  clean data
+2.  Clean data
 3.  Take a peak at the data
 4.  Partition data
 5.  Use training data to train model and run through models namely syuzhet,Afinn, bing, nrc, vegnitte, sentimentr/rinker
@@ -520,7 +520,7 @@ facet_wrap(~sentiment, ncol = 2, scales = "free_y")
 
 ```{r echo=TRUE}
   #----------------------running the model on validation data set--------
-  #--------------------- Prediction Begin --------------------------------
+  #--------------------- Final prediction Begin --------------------------------
 
   # load final dataset for prediction
   tweet_validation <- load.Data("validation.csv")
@@ -537,7 +537,7 @@ facet_wrap(~sentiment, ncol = 2, scales = "free_y")
   # output the final prediction data frame
   as_tibble(prediction)
   
-#-------------------------Prediction END ---------------------------------
+#------------------------- Final prediction END ---------------------------------
       
 ```
 
