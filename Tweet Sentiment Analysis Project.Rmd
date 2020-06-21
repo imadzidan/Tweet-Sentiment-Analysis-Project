@@ -1,0 +1,551 @@
+---
+title: "Tweet Sentiment Analysis Project"
+author: "I Zidan"
+date: "19/06/2020"
+output: pdf_document
+---
+
+
+# Mission
+* Model/prepare and predict sentiments for the provided tweets datasets.
+* The datasets used was extracted from Kaggle
+
+# Given
+* train.csv file provided by Kaggle for the purpose of training the model
+* validation.csv dataset for final prediction. Also provided by kaggle
+
+# Requirements
+* Provide a model that is able to provide a sentiment for a given tweet
+* Apply model on the provided datasets
+
+
+# My thoughts
+Sentiment and text analysis and mining is a very challenging area. Many models are out there, but trust that you will always come across
+scenarios that you have either missed or think of. I am a begginer in this field, but does not stop me from thinking, the challenges are
+down to the fact that humans are unpredictable and can write anything and use text and notations creatively and differently.
+I felt sometimes lost and sometimes overwhelmed.I did learn my limitations and the need to take the next step in datascience.
+The key is to get involved as much as you can.
+
+# Methodology
+I have read a lot about the topic and decided to run the given data through many algorithms and pick the best one and in turn use for 
+the final prediction. This is really the essence of what I learned in this course. It is always recommended to look at options and pick the best. So, to do this, the below will be done:
+
+1.  Load data
+2.  clean data
+3.  Take a peak at the data
+4.  Partition data
+5.  Use training data to train model and run through models namely syuzhet,Afinn, bing, nrc, vegnitte, sentimentr/rinker
+6.  Validate all models against training data
+7.  Pick and show the best model
+8.  Again run the test data through all models model
+9.  Validate all models against test data
+10. Pick and show best one
+11. Use validation data with the best model
+13. Show prediction
+
+  
+# References
+* Course lecture notes/videos (big help)
+* Sentimentr documentation
+* vegnitte documentation
+* tidytext documentation
+
+# Note
+
+Please be aware that much of the work work was done on the preparation and building.
+kindly bear with me and thank you.
+
+```{r message=FALSE, warning=FALSE, include=FALSE}
+options(warn = -1, digits = 3)
+
+```
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Loading required libraries
+The first task in this journey is to load the required libraries.
+Some of the important libraries for the task are tidytext, textclean, vegnitte, Syizhet, sentimentr.
+please refer to code to see full list.
+
+```{r loading required libraries, message=FALSE, warning=FALSE, include=FALSE}
+
+if(!require(readr)) install.packages("readr", repos = "http://cran.us.r-project.org")
+if(!require(dplyr)) install.packages("dplyr", repos = "http://cran.us.r-project.org")
+if(!require(tidyverse)) install.packages("tidyverse", repos = "http://cran.us.r-project.org")
+if(!require(tidytext)) install.packages("tidytext", repos = "http://cran.us.r-project.org")
+if(!require(stringr)) install.packages("stringr", repos = "http://cran.us.r-project.org")
+if(!require(tidyr)) install.packages("tidyr", repos = "http://cran.us.r-project.org")
+if(!require(textclean)) install.packages("textclean", repos = "http://cran.us.r-project.org")
+if(!require(caret)) install.packages("caret", repos = "http://cran.us.r-project.org")
+if(!require(SentimentAnalysis)) install.packages("SentimentAnalysis", repos = "http://cran.us.r-project.org")
+if (!require("pacman")) install.packages("pacman")
+pacman::p_load_gh("trinker/sentimentr", "sfeuerriegel/SentimentAnalysis")
+pacman::p_load(syuzhet, microbenchmark, RSentiment)
+
+```
+
+
+# Global functions 
+the below functions will help in cleaning and preparing the model.
+```{r global functions, message=FALSE, warning=FALSE, include=TRUE}
+
+# This function is responsible for performing the initial cleaning of the tweets text
+# Function require cleantext package
+# function names are self explanatory.
+# for full reference please visit https://github.com/trinker/textclean
+
+cleanText  <- function(text){
+  text = replace_url(text)
+  text = replace_emoticon(text)
+  text = replace_tag(text) 
+  text = replace_non_ascii(text)
+  # Replace contractions with both words
+  text = replace_contraction(text)
+  text = replace_date(text)
+  text = replace_number(text)
+  text = replace_html(text)
+  text = replace_kern(text)
+
+  return(text)
+}
+
+# Function to convert text sentiment to integers
+# this is done for validation purposes later on
+decodeSentiment<- function(sn) {
+  case_when(
+    sn == "neutral" ~ 0,
+    sn == "negative" ~ -1,
+    sn  == "positive" ~ 1
+  )
+}
+
+# Function to convert integer sentiment to text sentiment
+# this is used for the final output
+encodeSentiment<- function(sn) {
+  case_when(
+    sn == 0 ~ "neutral",
+    sn < 0  ~ "negative",
+    sn > 0  ~ "positive"
+  )
+}
+
+# Function to interpret predicted sentiments to integer form (-1,0,1) for consistency
+matchSentiment<- function(sn) {
+  case_when(
+    sn == 0 ~ 0,
+    sn < 0  ~ -1,
+    sn > 0  ~ 1
+  )
+}
+
+
+# set working Directory mainly to pickup the datafile from a known location
+# set working Directory mainly to pickup the datafile from a known location
+setEnv <- function(){
+  setwd(str_c(getwd(),"/"))
+  str_c("Working directory is set. Place data file in this location ",getwd(),"/")
+}
+
+# Loading the tweets data provided
+load.Data <- function(dataFile){
+  
+  if (file.exists(dataFile))  {
+    df <- read_csv(dataFile)
+    return(df)
+  } else {
+    
+    str_c("place file in this location ",getwd(),"/")
+  }
+  
+}
+
+# The check_text function helps as it gives you suggestions on how to clean the text
+# This check_text exists in the textClean library
+check.Text <- function(df){
+  
+  # The check_text function helps as it gives you suggestions on how to clean the text
+  x <- as.factor(df$text)
+  return(check_text(df$text))
+  
+}
+
+# Function to clean the tweets text and drop unwanted columns.
+# Function will create a new column "modeled_text" which is the cleaned version of the text. 
+# The clean text will be used to get the sentiment
+clean.Data <- function(df){
+  df <- df %>% drop_na() %>% mutate(modeled_text = cleanText(text))
+  df <- df[-c(2,3)]
+  return(df)
+}
+
+
+```
+
+# Partition the data into train set and test set.
+the split is 50% for the training and 50% for the test. The aim is to include 
+as many variations as possible.This deemed to be helpfull when validating the result.
+```{r Create model partitions, echo=TRUE, warning=FALSE}
+
+# partition data to start the text analysis
+# 50-50. 50% for training and 50% for test. this is to include as many variation as possible.
+# it seems to give a better validation estimates.
+partition.Data <- function(df){
+  tweets_test_index <- createDataPartition(y = df$sentiment, times = 1,  p = 0.5, list = FALSE)
+  tweets_train_set <- df[-tweets_test_index,]
+  tweets_test_set <- df[tweets_test_index,]
+  return(list(tweets_train_set,tweets_test_set))
+  }
+```
+
+```{r include=FALSE}
+set.seed(1974)
+```
+
+
+# Trianing the model
+up to this stage, no output is shown as. sorry but eventually, it will happen.
+
+```{r model functiong, echo=TRUE, message=FALSE, warning=FALSE}
+
+# This function will take the text through many algorithms.
+# Function will provide stats for each algorithm and pick the best one.
+# sentimentr/rinker, vegnitta and syuzhet libraries are used.
+train.model <- function(which_df){
+
+  #Which dataset to process
+  if (which_df == "train") {
+  df <- train_set
+  }else{
+    df <- test_set
+  }
+  
+   #Remove na if exists
+  df <- df %>% drop_na()
+
+  # Run 4 selected algorithms using Syuzhet package
+  # Store result in a dataframe
+  syuzhet <- setNames(as.data.frame(lapply(c("syuzhet","bing", "afinn", "nrc"),
+                        function(x) matchSentiment(get_sentiment(df$modeled_text, method=x)))), 
+                        c("jockers","bing", "afinn", "nrc"))
+  
+  pred_tbl_p1 <- data.frame(
+    textID = df$textID,
+    modeled_text = df$modeled_text,
+    syuzhet,
+    #include 5th algorithm from another package vegnitte
+    vegnitte= matchSentiment(replace_na(analyzeSentiment(df$modeled_text)$SentimentQDAP,0)),
+    actual_sentiment = decodeSentiment(df$sentiment),
+    stringsAsFactors = FALSE
+  )
+  
+  # Run and include 6th algorithm using sentimentr
+  (rinker <- with(
+    df, 
+    sentiment_by(
+      get_sentences(modeled_text), question.weight = 0,
+      averaging.function = average_weighted_mixed_sentiment,list(textID)
+    )
+  ) %>% filter(!is.na(textID)))
+  
+  # Store sentimentr output into a frame
+  pred_tbl_p2 <- rinker %>% mutate(sentimentr= matchSentiment(ave_sentiment))
+  pred_tbl_p2 <- pred_tbl_p2[,-c(2,3,4)]
+  
+  #join the the above two outputs into one data frame (Combining results)
+  pred_tbl <- pred_tbl_p1 %>% inner_join(pred_tbl_p2,by="textID")
+ 
+  return(pred_tbl)
+
+}
+
+# Function to validate predicted sentiment against the actual sentiment.
+# sentimentr::validate_sentiment is used
+validate.Prediction <- function(df){
+
+  nrc_pred <- validate_sentiment(df$nrc, df$actual_sentiment)
+  nrc_pred<- nrc_pred %>% 
+                      mutate(mda=attributes(nrc_pred)$mda,
+                      mare=attributes(nrc_pred)$mare,method="nrc")
+  
+  bing_pred <- validate_sentiment(df$bing, df$actual_sentiment)
+  bing_pred<- bing_pred %>% 
+                       mutate(mda=attributes(bing_pred)$mda,
+                       mare=attributes(bing_pred)$mare,method="bing")
+  
+  afinn_pred <- validate_sentiment(df$afinn, df$actual_sentiment)
+  afinn_pred <- afinn_pred %>%
+                           mutate(mda=attributes(afinn_pred)$mda,
+                           mare=attributes(afinn_pred)$mare,method="afinn")
+  
+  sentimentr_pred <- validate_sentiment(df$sentimentr, df$actual_sentiment)
+  sentimentr_pred <- sentimentr_pred %>% 
+                                    mutate(mda=attributes(sentimentr_pred)$mda,
+                                    mare=attributes(sentimentr_pred)$mare,method="sentimentr")
+  
+  jockers_pred <- validate_sentiment(df$jockers, df$actual_sentiment)
+  jockers_pred <- jockers_pred %>% 
+                               mutate(mda=attributes(jockers_pred)$mda,
+                               mare=attributes(jockers_pred)$mare,method="jockers")
+  
+  vegnitte_pred <- validate_sentiment(df$vegnitte, df$actual_sentiment)
+  
+  vegnitte_pred <- vegnitte_pred %>% 
+                                 mutate(mda=attributes(vegnitte_pred)$mda,
+                                 mare=attributes(vegnitte_pred)$mare,method="vegnitte")
+  
+  all_pred<- bind_rows(nrc_pred, bing_pred,afinn_pred,sentimentr_pred,jockers_pred)
+  
+  # Returning a list of two dataframes. One contains all validation
+  # whilst the second contains only the best validation.
+  return(list(all_pred,all_pred[which.max(all_pred$accuracy),]))
+  
+}
+
+# Function to perform prediction with the best algorithm found in our case afinn
+predict.Sentiment<- function(df){
+  
+  df <- df %>% drop_na()
+  
+  syuzhet <- setNames(as.data.frame(lapply(c("bing"),
+             function(x) matchSentiment(get_sentiment(df$modeled_text, method=x)))), c("sentiment"))
+  
+  pred <- data.frame(
+    textID = df$textID,
+    modeled_text = df$modeled_text,
+    syuzhet,
+    stringsAsFactors = FALSE
+  ) 
+  pred <- within(pred, sentiment <- encodeSentiment(sentiment))
+  
+  return(pred)
+}
+
+#Clean output by dropping and renaming columns.
+clean.output <- function(df,alg,n){
+  
+  df <- df[c(1,2,n)]
+  
+  names(df)[names(df)==alg] <- "sentiment"
+  
+  return(within(df, sentiment <- encodeSentiment(sentiment)))
+  
+}
+
+```
+
+# Running the model
+
+Now, all the building that has been created is called into action.
+  
+## Load and clean data
+    
+```{r the model, echo=TRUE, message=FALSE}
+
+#----------------------building the model-------------------------------
+  # Set working directory to local directory.
+  # Datafiles should be present
+  setEnv()
+
+  # pick up the tain.csv file from the location set above
+  tweet_train <- load.Data("train.csv")
+  
+  # The data looks like this
+  head(tweet_train,5)
+  
+  # Function from textclean package that gives recommendations
+  # on where to performs cleanups. very very helpful.
+  # I will show the output at the end of the report
+  Text_cleanup_recommendation <- check.Text(tweet_train)
+  
+
+  # Take the loaded data through a cleaning process.
+  # Text column will be prepared to use in the sentiment analysis process 
+  tweet_train <- clean.Data(tweet_train)
+  
+  # Sample from the cleaned data now looks like this
+  # modeled_text is the text to source of sentiment analysis
+  head(tweet_train,5)
+
+```
+
+## Explore the data
+```{r Explore the data, echo=TRUE, message=FALSE} 
+ 
+# The main conclusion from this exploration is that neutral data seems to occupy most of the dataset.
+# The data is very unpredictable. More insights can be drawn but it is very time consuming.
+# In my opinion not much exploration we can do about the data itself in this context.
+# new texts are very unpredictable and can be anything.
+# Exploring the actual data helped in deciding what to clean. 
+
+
+# Show the dataset structure after cleaning
+glimpse(tweet_train)
+  
+# Records count broken down by sentiment.
+# Neutral sentiment seems to have the majority of records
+tweet_train %>% group_by(sentiment) %>% summarise(n())
+  
+# More information on the breakdown
+by(tweet_train, tweet_train$sentiment, summary)
+
+# Quick graph showing words count per sentiment
+sentiment_words <- tweet_train %>%
+unnest_tokens(word, modeled_text) %>% filter(!word %in% stop_words$word) %>%
+count(sentiment, word, sort = TRUE)
+  
+#Tidy text to show a data split by sentiment.
+total_words <- sentiment_words %>%
+group_by(sentiment) %>% 
+summarize(total = sum(n))
+  
+sentiment_words <- left_join(sentiment_words, total_words)
+  
+# Ploting word counts by sentiment.
+ggplot(sentiment_words, aes(n/total, fill = sentiment)) +
+geom_histogram(show.legend = FALSE) +
+xlim(NA, 0.0009) +
+facet_wrap(~sentiment, ncol = 2, scales = "free_y")
+  
+
+```
+
+## Partition, train and validate training data  
+  
+```{r echo=TRUE, message=FALSE} 
+  
+  # create a partition 50% training and 50% test
+  # As mentioned before, this betters the validation numbers.
+  # Partition function retuns a list of two frames
+  dataPartitions <- partition.Data(tweet_train)
+  
+  # assign the first dataframe in the list to training
+  train_set <- dataPartitions[[1]]
+  
+  # training will run multiple algorthms and returns all results
+  train_pred <- train.model("train")
+  
+  # Sample from the data output looks like this
+  head(as_tibble(train_pred),5)
+  
+  
+  # Now validation of the above output will take place.
+  # The best result is decided on the accuracy figure.
+  # mda (Mean Directional Accuracy) and mare(Mean Absolute Rescaled Error) are 
+  # also important, hence their inclusion in the output
+  # More explanation found on https://rdrr.io/cran/sentimentr/man/validate_sentiment.html
+  validation <- validate.Prediction(train_pred)
+  
+  # validation process will return a list of two dataframes
+  # this is the first dataframe in the list and contains all validations.
+  train_pred_validations <- as_tibble(validation[[1]])[,c(1,2,3,4,5,6,7,8)]
+  
+  # All validation frame look this this
+  train_pred_validations
+  
+  # this is the second dataframe in the list and contains the best validation results
+  train_best_prediction <- as_tibble(validation[[2]])[,c(4,6,7,8)]
+
+  # best prediction dataframe looks like this
+  train_best_prediction
+  
+  # Note
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+  
+  str_c("the best model for training dataset is " ,  train_best_prediction$method , " with accuracy of " , format(round(train_best_prediction$accuracy*100, 3), nsmall = 3),"%")
+
+  train_pred <- clean.output(train_pred,train_best_prediction$method,which(colnames(train_pred)==train_best_prediction$method))
+  
+```
+
+```{r echo=TRUE}
+ # Sample of the final output of the training data set
+  head(as_tibble(train_pred),5)
+```
+
+## Load, train and validate test dataset
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+  
+  #----------------------testing the model-------------------------------
+  
+  # Repeating steps applied when training the model on the test data set
+  
+  # assign the second dataframe in the partition list to test
+  # this will create the test dataset
+  test_set <- dataPartitions[[2]]
+  
+  test_pred <- train.model("test")
+  
+  validation <- validate.Prediction(test_pred)
+  
+  test_pred_validations <- as_tibble(validation[[1]])[,c(1,2,3,4,5,6,7,8)]
+  test_pred_validations
+  
+  
+  test_best_prediction <- as_tibble(validation[[2]])[,c(4,6,7,8)]
+  test_best_prediction
+  
+  # Note
+```
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+  
+  str_c("the best model for test dataset is " ,  test_best_prediction$method , " with accuracy of " ,format(round(test_best_prediction$accuracy*100, 3), nsmall = 3),"%")
+
+  test_pred <- clean.output(test_pred,test_best_prediction$method,which(colnames(test_pred)==test_best_prediction$method))  
+  
+  # Sample of the final output of the test data set
+  head(as_tibble(test_pred),5)
+    
+  remove(dataPartitions)
+  remove(best_prediction)
+
+```
+
+```{r echo=TRUE}
+
+  # This concludes the training and test process.
+  # The conclusion is that when running algorithms for training dataset the best score
+  # came from algorithm bing. However, afinn shows as the best score when running against test data.
+  # I have decided to go for bing as the accuracy it produced was higher than the afinn.
+  # Final model will run with bing algorithm.
+```
+
+
+## load, clean and predict sentiment
+
+```{r echo=TRUE}
+  #----------------------running the model on validation data set--------
+  #--------------------- Prediction Begin --------------------------------
+
+  # load final dataset for prediction
+  tweet_validation <- load.Data("validation.csv")
+
+  # clean data
+  tweet_validation <- clean.Data(tweet_validation)
+  
+  # the data to be predicted looks like this
+  as_tibble(tweet_validation)
+  
+  # Perform prediction
+  prediction <- predict.Sentiment(tweet_validation)
+  
+  # output the final prediction data frame
+  as_tibble(prediction)
+  
+#-------------------------Prediction END ---------------------------------
+      
+```
+
+## text cleaning recommendation
+
+```{r echo=TRUE}
+  # Sample of the cleanup recommendations (as promised)
+  Text_cleanup_recommendation
+
+```
+
