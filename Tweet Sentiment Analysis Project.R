@@ -78,15 +78,27 @@ setEnv <- function(){
 }
 
 # Loading the tweets data provided
-load.Data <- function(dataFile){
+# Files are placed on Git to download if required
+load.Data <- function(dataFile,method){
   
-  if (file.exists(dataFile))  {
-    df <- read_csv(dataFile)
-    return(df)
-  } else {
+  if (method == "remote") {
     
-    str_c("place file in this location ",getwd(),"/")
+    if (dataFile=="train.csv") {
+       urlfile <- "https://raw.githubusercontent.com/imadzidan/Tweet-Sentiment-Analysis-Project/master/train.csv"
+    }else {
+      urlfile <- "https://raw.githubusercontent.com/imadzidan/Tweet-Sentiment-Analysis-Project/master/validation.csv"
+    }
+    
+    df <- read_csv(url(urlfile))
+    
+  }else {
+    
+    df <- read_csv(dataFile)
+    
   }
+    
+    
+    return(df)
   
 }
 
@@ -251,8 +263,11 @@ set.seed(1974)
   # Set working directory to where the datafiles are
   setEnv()
   
-  # pick up the tain.csv file from the location set above
-  tweet_train <- load.Data("train.csv")
+# pick up the train.csv file from Git or the location set above
+# remote parameter is set to pick up the data from Git
+# set it to any other value like loc to pickup the file from the current
+# working directory. provided you downloaded the file into the directory
+  tweet_train <- load.Data("train.csv","remote")
   
   # The data looks like this
   head(tweet_train,5)
@@ -394,8 +409,10 @@ set.seed(1974)
   
   #----------------------running the model on validation data set--------
   
-  # load final dataset for prediction
-  tweet_validation <- load.Data("validation.csv")
+  # load final dataset for prediction from Git
+  # to pick up file from local directory,change parameter 
+  # remote into any other value such as loc
+  tweet_validation <- load.Data("validation.csv","remote")
   
   tweet_validation <- clean.Data(tweet_validation)
   
